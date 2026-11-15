@@ -33,6 +33,38 @@ jobs:
         run: |
           python -c "import json; d=json.load(open('semgrep-results.json')); print('Hallazgos SAST:', len(d.get('results', [])))"
 
+      - name: Verificar politica SAST
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+
+          with open("semgrep-results.json") as f:
+              report = json.load(f)
+
+          if report.get("errors"):
+              print("ERROR: El analisis SAST contiene errores.")
+              sys.exit(1)
+
+          findings = report.get("results", [])
+          blocking = [
+              r for r in findings
+              if r.get("extra", {}).get("severity", "").upper()
+              in ("ERROR", "HIGH", "CRITICAL")
+          ]
+
+          print("Hallazgos totales:", len(findings))
+          print("Hallazgos bloqueantes:", len(blocking))
+
+          for r in blocking:
+              print(r["check_id"], r["path"])
+
+          if blocking:
+              print("QUALITY GATE SAST: FAILED")
+              sys.exit(1)
+
+          print("QUALITY GATE SAST: PASSED")
+          PY
       - name: Publicar reporte Semgrep
         if: always()
         uses: actions/upload-artifact@v4
@@ -91,7 +123,6 @@ jobs:
 
       - name: Analizar dependencias
         id: dependency_scan
-        continue-on-error: true
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: NodeGoat
@@ -100,6 +131,7 @@ jobs:
           out: reports
           args: >
             --enableExperimental
+            --failOnCVSS 7
 
       - name: Publicar reporte SCA
         if: always()
@@ -119,3 +151,4 @@ jobs:
           else
             echo "::warning::No se genero el reporte HTML"
           fi
+
