@@ -41,3 +41,81 @@ jobs:
           path: semgrep-results.json
           if-no-files-found: warn
           retention-days: 30
+
+  sbom-cyclonedx:
+    name: SBOM - Syft CycloneDX
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar codigo fuente
+        uses: actions/checkout@v4
+
+      - name: Generar SBOM CycloneDX
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+          upload-artifact: false
+
+      - name: Verificar componentes del SBOM
+        run: |
+          python3 - <<'PY'
+          import json
+          with open("sbom.cyclonedx.json", encoding="utf-8") as f:
+              data = json.load(f)
+          assert data.get("bomFormat") == "CycloneDX"
+          components = data.get("components", [])
+          print("Formato:", data["bomFormat"])
+          print("Componentes encontrados:", len(components))
+          assert len(components) > 0, "SBOM sin componentes"
+          PY
+
+      - name: Publicar SBOM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cyclonedx.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  sca-dependency-check:
+    name: SCA - OWASP Dependency-Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Descargar codigo fuente
+        uses: actions/checkout@v4
+
+      - name: Analizar dependencias
+        id: dependency_scan
+        continue-on-error: true
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: NodeGoat
+          path: .
+          format: HTML
+          out: reports
+          args: >
+            --enableExperimental
+
+      - name: Publicar reporte SCA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Comprobar ejecucion SCA
+        if: always()
+        run: |
+          echo "Estado del escaneo: ${{ steps.dependency_scan.outcome }}"
+          if [ -f reports/dependency-check-report.html ]; then
+            echo "Reporte HTML generado correctamente"
+          else
+            echo "::warning::No se genero el reporte HTML"
+          fi
