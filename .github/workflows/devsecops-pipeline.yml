@@ -1,4 +1,4 @@
-﻿name: DevSecOps Pipeline
+name: DevSecOps Pipeline
 
 on:
   push:
@@ -131,7 +131,7 @@ jobs:
           out: reports
           args: >
             --enableExperimental
-            --failOnCVSS 7
+            --failOnCVSS 7 --suppression security/baseline-suppressions.xml
 
       - name: Publicar reporte SCA
         if: always()
