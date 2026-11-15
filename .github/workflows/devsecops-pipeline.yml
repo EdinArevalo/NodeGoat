@@ -1,0 +1,43 @@
+﻿name: DevSecOps Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sast-semgrep:
+    name: SAST - Semgrep
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:latest
+
+    steps:
+      - name: Descargar codigo fuente
+        uses: actions/checkout@v4
+
+      - name: Ejecutar analisis SAST
+        run: |
+          semgrep scan \
+            --config p/security-audit \
+            --json \
+            --output semgrep-results.json \
+            .
+
+      - name: Verificar reporte JSON
+        run: |
+          python -c "import json; d=json.load(open('semgrep-results.json')); print('Hallazgos SAST:', len(d.get('results', [])))"
+
+      - name: Publicar reporte Semgrep
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-json-report
+          path: semgrep-results.json
+          if-no-files-found: warn
+          retention-days: 30
